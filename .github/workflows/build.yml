@@ -16,20 +16,20 @@ jobs:
     name: Android AAR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
 
       - name: Build AARs
         working-directory: android
         run: ./gradlew assemble -PpluginVersion="$PLUGIN_VERSION" --no-daemon
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: android
           path: addons/applovin_max/bin/android/*.aar
@@ -43,7 +43,7 @@ jobs:
       matrix:
         godot: ["4.3-stable", "4.4.1-stable", "4.5.2-stable", "4.6.3-stable", "4.7.2-stable"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install SCons
         run: brew install scons
@@ -60,7 +60,7 @@ jobs:
           find "$sdk" -maxdepth 3 | head -n 40
           find "$sdk" -path "*ios-arm64/*.framework/AppLovinSDK" -exec file {} \;
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: ios-${{ matrix.godot }}
           path: ios/bin/${{ matrix.godot }}
@@ -74,7 +74,7 @@ jobs:
       matrix:
         godot: ["4.3-stable", "4.7.2-stable"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download Godot
         run: |
@@ -90,14 +90,14 @@ jobs:
     needs: [android, ios, gdscript]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: android
           path: addons/applovin_max/bin/android
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: ios-*
           path: ios-artifacts
@@ -119,7 +119,7 @@ jobs:
           done
           ls -la dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: godot-applovin-max
           path: dist/*.zip
@@ -133,7 +133,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: godot-applovin-max
           path: dist
