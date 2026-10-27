@@ -77,8 +77,16 @@ cp "$ROOT/tests/project/build/ios-release/xcodebuild-device-release.log" "$EXPOR
 
 # 4. Simulator build. Godot 4.4+ templates weak-link MetalFX, which the iOS Simulator SDK
 #    does not ship (the simulator renderer does not use Metal), so drop that one flag.
+#    Some official templates ship the simulator libgodot.a for x86_64 only; in that case the
+#    app is built for x86_64 and runs under Rosetta in the simulator.
 sed -i '' 's/ -weak_framework MetalFX//g' "$PBXPROJ"
-xcode_build "$EXPORT_DIR" Debug xcodebuild.log -sdk iphonesimulator -destination "id=$UDID" ONLY_ACTIVE_ARCH=YES || exit 1
+SIM_LIB="$(find "$EXPORT_DIR/$NAME.xcframework" -path "*simulator*" -name "libgodot.a" | head -n 1)"
+SIM_ARCHS="$(xcrun lipo -archs "$SIM_LIB" 2>/dev/null || echo unknown)"
+SIM_ARCH=arm64
+case " $SIM_ARCHS " in *" arm64 "*) ;; *) SIM_ARCH=x86_64 ;; esac
+echo "Template simulator library architectures: $SIM_ARCHS -> building the simulator app for $SIM_ARCH"
+xcode_build "$EXPORT_DIR" Debug xcodebuild.log -sdk iphonesimulator \
+	-destination "platform=iOS Simulator,id=$UDID,arch=$SIM_ARCH" ARCHS="$SIM_ARCH" ONLY_ACTIVE_ARCH=NO || exit 1
 DERIVED="$EXPORT_DIR/DerivedData"
 
 APP="$(find "$DERIVED/Build/Products" -maxdepth 2 -name "$NAME.app" | head -n 1)"
