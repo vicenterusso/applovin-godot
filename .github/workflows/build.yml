@@ -97,6 +97,12 @@ jobs:
       matrix:
         godot: ["4.3-stable", "4.4.1-stable", "4.5.2-stable", "4.6.3-stable", "4.7.2-stable"]
     steps:
+      - name: Free disk space for the emulator
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell /usr/local/lib/node_modules
+          df -h /
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v5
@@ -143,6 +149,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          disk-size: 3072M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: tests/ci/run_android_test.sh tests/project/build/android/applovin_max_test.apk

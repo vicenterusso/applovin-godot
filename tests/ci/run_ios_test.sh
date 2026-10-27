@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Builds the exported Xcode project for the iOS Simulator (real link against the official
-# Godot template and AppLovinSDK.xcframework), checks the generated project, runs the app
-# in a simulator and waits for the on-device test result (tests/project/test_runner.gd).
+# Checks the exported Xcode projects, links them for real devices (debug and release) and
+# for the iOS Simulator against the official Godot template and AppLovinSDK.xcframework,
+# runs the app in a simulator and waits for the on-device test result
+# (tests/project/test_runner.gd).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -53,19 +54,38 @@ echo "Simulator: $UDID"
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
 
-# 3. Build (this is where an engine ABI mismatch shows up as "Undefined symbols").
+# 3. Link for real devices, debug and release (this is where an engine ABI mismatch shows
+#    up as "Undefined symbols for architecture arm64").
+xcode_build() { # xcode_build <export_dir> <configuration> <log name> <xcodebuild args...>
+	local dir="$1" configuration="$2" log="$1/$3"
+	shift 3
+	xcodebuild -project "$dir/$NAME.xcodeproj" -scheme "$NAME" -configuration "$configuration" \
+		-derivedDataPath "$dir/DerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+		"$@" build > "$log" 2>&1 || true
+	grep -E "error:|Undefined symbols|BUILD (SUCCEEDED|FAILED)" "$log" | head -n 40 || true
+	if grep -q "BUILD SUCCEEDED" "$log"; then
+		echo "PASS  xcodebuild $configuration ($*)"
+	else
+		echo "FAIL  xcodebuild $configuration ($*)"
+		tail -n 60 "$log"
+		return 1
+	fi
+}
+xcode_build "$EXPORT_DIR" Debug xcodebuild-device-debug.log -sdk iphoneos -destination "generic/platform=iOS" || fail=1
+xcode_build "$ROOT/tests/project/build/ios-release" Release xcodebuild-device-release.log -sdk iphoneos -destination "generic/platform=iOS" || fail=1
+cp "$ROOT/tests/project/build/ios-release/xcodebuild-device-release.log" "$EXPORT_DIR/" 2>/dev/null || true
+
+# 4. Simulator build. Godot 4.4+ templates weak-link MetalFX, which the iOS Simulator SDK
+#    does not ship (the simulator renderer does not use Metal), so drop that one flag.
+sed -i '' 's/ -weak_framework MetalFX//g' "$PBXPROJ"
+xcode_build "$EXPORT_DIR" Debug xcodebuild.log -sdk iphonesimulator -destination "id=$UDID" ONLY_ACTIVE_ARCH=YES || exit 1
 DERIVED="$EXPORT_DIR/DerivedData"
-xcodebuild -project "$EXPORT_DIR/$NAME.xcodeproj" -scheme "$NAME" -configuration Debug \
-	-sdk iphonesimulator -destination "id=$UDID" -derivedDataPath "$DERIVED" \
-	ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-	build 2>&1 | tee "$EXPORT_DIR/xcodebuild.log" | grep -E "error:|warning: .*applovin|Undefined symbols|BUILD (SUCCEEDED|FAILED)" || true
-grep -q "BUILD SUCCEEDED" "$EXPORT_DIR/xcodebuild.log" || { echo "xcodebuild failed" >&2; tail -n 80 "$EXPORT_DIR/xcodebuild.log"; exit 1; }
 
 APP="$(find "$DERIVED/Build/Products" -maxdepth 2 -name "$NAME.app" | head -n 1)"
 check "AppLovinSDK.framework is embedded in the app" test -d "$APP/Frameworks/AppLovinSDK.framework"
 check "AppLovin resources bundle is in the app" test -d "$APP/Frameworks/AppLovinSDK.framework/AppLovinSDKResources.bundle"
 
-# 4. Run the on-device test.
+# 5. Run the on-device test.
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl launch --terminate-running-process \
 	--stdout="$EXPORT_DIR/app_stdout.log" --stderr="$EXPORT_DIR/app_stderr.log" "$UDID" "$BUNDLE_ID"
