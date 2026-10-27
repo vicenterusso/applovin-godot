@@ -177,6 +177,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Recent Godot templates are built with the newest iOS SDK (e.g. 4.7 references iOS 26
+      # symbols), so link with the newest Xcode installed on the runner.
+      - name: Select the newest Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -n 1)"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          xcrun simctl list runtimes
+
       - uses: actions/download-artifact@v5
         with:
           name: ios-${{ matrix.godot }}
