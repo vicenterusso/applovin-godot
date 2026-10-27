@@ -1,0 +1,24 @@
+; Integration test project for the AppLovin MAX plugin (see tests/README.md).
+; addons/applovin_max and ios/plugins/applovin_max are copied in by tests/prepare_project.sh.
+
+config_version=5
+
+[application]
+
+config/name="AppLovin MAX Test"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+
+[autoload]
+
+AppLovinMax="*res://addons/applovin_max/applovin_max.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/applovin_max/plugin.cfg", "res://addons/applovin_max_ci/plugin.cfg")
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

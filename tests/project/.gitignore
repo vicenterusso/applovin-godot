@@ -1,0 +1,7 @@
+# Filled in by tests/prepare_project.sh
+/addons/applovin_max/
+/ios/
+/android/
+/test_config.json
+/.godot/
+/build/

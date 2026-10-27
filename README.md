@@ -259,6 +259,14 @@ do SDK da AppLovin e cria `applovin_max.debug.xcframework` e `applovin_max.relea
 O workflow [`.github/workflows/build.yml`](.github/workflows/build.yml) faz tudo isso e, em tags `v*`,
 publica uma release com um zip por versão do Godot.
 
+## Testes
+
+Cada push roda, para **todas as versões do Godot suportadas** e com o editor e os export templates
+**oficiais**, testes de ponta a ponta: export Android (Gradle) executado num **emulador Android** e export iOS
+compilado com `xcodebuild` (link real contra o template oficial) e executado no **Simulador iOS**. Um app de
+teste chama a API inteira e confere os sinais vindos do SDK da AppLovin. Detalhes em
+[`tests/README.md`](tests/README.md).
+
 ## Licença
 
 MIT. Os SDKs da AppLovin não fazem parte deste repositório e seguem a licença da AppLovin

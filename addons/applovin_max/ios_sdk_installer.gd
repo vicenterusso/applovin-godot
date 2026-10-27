@@ -8,6 +8,9 @@ const DESTINATION_DIR := "res://ios/plugins/applovin_max"
 const FRAMEWORK_NAME := "AppLovinSDK.xcframework"
 const TEMP_ZIP := "user://applovin-ios-sdk.zip"
 
+## Emitted when the installation ends; error_message is empty on success.
+signal finished(error_message: String)
+
 var _http: HTTPRequest
 var _version := ""
 
@@ -98,3 +101,4 @@ func _finish(error_message: String) -> void:
 		push_error("[AppLovin MAX] " + error_message)
 	if Engine.is_editor_hint():
 		EditorInterface.get_resource_filesystem().scan()
+	finished.emit(error_message)

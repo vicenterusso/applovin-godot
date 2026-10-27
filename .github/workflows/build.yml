@@ -85,9 +85,148 @@ jobs:
       - name: Check scripts
         run: ci/check_gdscript.sh ./godot
 
+  # End-to-end: export tests/project with the official Godot editor + export templates,
+  # run it on an Android emulator and check the on-device test result (tests/README.md).
+  android-e2e:
+    name: Android E2E (Godot ${{ matrix.godot }})
+    needs: [android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.3-stable", "4.4.1-stable", "4.5.2-stable", "4.6.3-stable", "4.7.2-stable"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: android
+          path: addons/applovin_max/bin/android
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-ci
+          key: godot-ci-linux-android-${{ matrix.godot }}-v1
+
+      - name: Install Godot and Android export templates
+        run: tests/ci/install_godot.sh linux "${{ matrix.godot }}" android_source.zip
+
+      - name: Prepare test project
+        run: tests/prepare_project.sh
+        env:
+          APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
+          APPLOVIN_TEST_DEVICE_IDS: ${{ secrets.APPLOVIN_TEST_DEVICE_IDS }}
+          APPLOVIN_ANDROID_INTERSTITIAL_ID: ${{ secrets.APPLOVIN_ANDROID_INTERSTITIAL_ID }}
+          APPLOVIN_ANDROID_REWARDED_ID: ${{ secrets.APPLOVIN_ANDROID_REWARDED_ID }}
+          APPLOVIN_ANDROID_APP_OPEN_ID: ${{ secrets.APPLOVIN_ANDROID_APP_OPEN_ID }}
+          APPLOVIN_ANDROID_BANNER_ID: ${{ secrets.APPLOVIN_ANDROID_BANNER_ID }}
+          APPLOVIN_ANDROID_MREC_ID: ${{ secrets.APPLOVIN_ANDROID_MREC_ID }}
+
+      - name: Export APK (Gradle build) and check manifest
+        run: tests/ci/export_android.sh
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: tests/ci/run_android_test.sh tests/project/build/android/applovin_max_test.apk
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: android-e2e-logs-${{ matrix.godot }}
+          path: |
+            tests/project/build/android/*.txt
+            tests/project/build/android/*.log
+          if-no-files-found: ignore
+
+  # End-to-end: export the Xcode project with the official Godot editor + iOS template,
+  # build it (real link), run it on the iOS Simulator and check the on-device test result.
+  ios-e2e:
+    name: iOS E2E (Godot ${{ matrix.godot }})
+    needs: [ios]
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.3-stable", "4.4.1-stable", "4.5.2-stable", "4.6.3-stable", "4.7.2-stable"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: ios-${{ matrix.godot }}
+          path: ios-plugin
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-ci
+          key: godot-ci-macos-ios-${{ matrix.godot }}-v1
+
+      - name: Install Godot and iOS export template
+        run: tests/ci/install_godot.sh macos "${{ matrix.godot }}" ios.zip
+
+      - name: Prepare test project
+        run: tests/prepare_project.sh ios-plugin
+        env:
+          APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
+          APPLOVIN_TEST_DEVICE_IDS: ${{ secrets.APPLOVIN_TEST_DEVICE_IDS }}
+          APPLOVIN_IOS_INTERSTITIAL_ID: ${{ secrets.APPLOVIN_IOS_INTERSTITIAL_ID }}
+          APPLOVIN_IOS_REWARDED_ID: ${{ secrets.APPLOVIN_IOS_REWARDED_ID }}
+          APPLOVIN_IOS_APP_OPEN_ID: ${{ secrets.APPLOVIN_IOS_APP_OPEN_ID }}
+          APPLOVIN_IOS_BANNER_ID: ${{ secrets.APPLOVIN_IOS_BANNER_ID }}
+          APPLOVIN_IOS_MREC_ID: ${{ secrets.APPLOVIN_IOS_MREC_ID }}
+
+      - name: Download the AppLovin iOS SDK with the editor's installer
+        timeout-minutes: 15
+        working-directory: tests/project
+        run: |
+          APPLOVIN_CI_INSTALL_IOS_SDK="$APPLOVIN_IOS_SDK_VERSION" "$GODOT" --headless --editor --path .
+          test -f ios/plugins/applovin_max/AppLovinSDK.xcframework/Info.plist
+          test -f ios/plugins/applovin_max/AppLovinSDK.xcframework/ios-arm64/AppLovinSDK.framework/AppLovinSDK
+          cat ios/plugins/applovin_max/AppLovinSDK.version
+
+      - name: Export Xcode project
+        timeout-minutes: 15
+        working-directory: tests/project
+        run: |
+          mkdir -p build/ios
+          "$GODOT" --headless --import
+          "$GODOT" --headless --export-debug "iOS" "$PWD/build/ios/AppLovinMaxTest.ipa" 2>&1 | tee build/ios/export.log
+          test -d build/ios/AppLovinMaxTest.xcodeproj
+
+      - name: Build, run on iOS Simulator and check results
+        run: tests/ci/run_ios_test.sh
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: ios-e2e-logs-${{ matrix.godot }}
+          path: |
+            tests/project/build/ios/*.log
+            tests/project/build/ios/*.txt
+          if-no-files-found: ignore
+
   package:
     name: Package
-    needs: [android, ios, gdscript]
+    needs: [android, ios, gdscript, android-e2e, ios-e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
