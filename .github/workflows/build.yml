@@ -205,12 +205,7 @@ jobs:
 
       - name: Export Xcode project
         timeout-minutes: 15
-        working-directory: tests/project
-        run: |
-          mkdir -p build/ios
-          "$GODOT" --headless --import
-          "$GODOT" --headless --export-debug "iOS" "$PWD/build/ios/AppLovinMaxTest.ipa" 2>&1 | tee build/ios/export.log
-          test -d build/ios/AppLovinMaxTest.xcodeproj
+        run: tests/ci/export_ios.sh
 
       - name: Build, run on iOS Simulator and check results
         run: tests/ci/run_ios_test.sh

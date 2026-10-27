@@ -23,6 +23,10 @@ rm -f "$APK"
 cd "$PROJECT"
 "$GODOT" --headless --import
 "$GODOT" --headless --install-android-build-template --export-debug "Android" "$APK" 2>&1 | tee "$PROJECT/build/android/export.log"
+if grep -qiE "export for preset .* failed" "$PROJECT/build/android/export.log"; then
+	echo "Godot reported an export error" >&2
+	exit 1
+fi
 test -f "$APK" || { echo "APK was not produced" >&2; exit 1; }
 ls -la "$APK"
 
