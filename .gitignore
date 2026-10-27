@@ -1,0 +1,16 @@
+# Godot
+.godot/
+
+# Android build
+android/.gradle/
+android/build/
+android/plugin/build/
+android/local.properties
+addons/applovin_max/bin/android/*.aar
+
+# iOS build
+ios/build/
+ios/bin/
+
+# OS
+.DS_Store

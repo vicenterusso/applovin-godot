@@ -1,0 +1,23 @@
+[config]
+name="AppLovinMax"
+; Godot picks applovin_max.debug.xcframework or applovin_max.release.xcframework
+; depending on the export mode.
+binary="applovin_max.xcframework"
+initialization="applovin_max_plugin_init"
+deinitialization="applovin_max_plugin_deinit"
+
+[dependencies]
+; AppLovinSDK.xcframework (and any mediation adapter frameworks placed in
+; res://ios/plugins/applovin_max/frameworks/) are added by the editor export
+; plugin in res://addons/applovin_max/export_plugin.gd.
+linked=[]
+embedded=[]
+system=["AdSupport.framework", "AudioToolbox.framework", "AVFoundation.framework", "CFNetwork.framework", "CoreGraphics.framework", "CoreHaptics.framework", "CoreMedia.framework", "CoreMotion.framework", "CoreTelephony.framework", "MessageUI.framework", "SafariServices.framework", "StoreKit.framework", "SystemConfiguration.framework", "UIKit.framework", "WebKit.framework"]
+capabilities=[]
+files=[]
+; AppTrackingTransparency is weak-linked so iOS < 14 devices can still launch.
+linker_flags=["-ObjC", "-lz", "-Wl,-weak_framework,AppTrackingTransparency"]
+
+[plist]
+; Info.plist entries (NSUserTrackingUsageDescription, SKAdNetworkItems, ...) are
+; configured in the iOS export preset under "applovin_max/ios/*".

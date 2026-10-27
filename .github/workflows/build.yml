@@ -1,0 +1,144 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PLUGIN_VERSION: "1.0.0"
+  APPLOVIN_IOS_SDK_VERSION: "13.6.4"
+
+jobs:
+  android:
+    name: Android AAR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build AARs
+        working-directory: android
+        run: ./gradlew assemble -PpluginVersion="$PLUGIN_VERSION" --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: addons/applovin_max/bin/android/*.aar
+          if-no-files-found: error
+
+  ios:
+    name: iOS (Godot ${{ matrix.godot }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.3-stable", "4.4.1-stable", "4.5.2-stable", "4.6.3-stable", "4.7.2-stable"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SCons
+        run: brew install scons
+
+      - name: Build xcframeworks
+        run: ios/scripts/build.sh "${{ matrix.godot }}" "ios/bin/${{ matrix.godot }}"
+
+      - name: Show AppLovin SDK layout
+        if: always()
+        run: |
+          sdk=ios/build/applovin-sdk/AppLovinSDK.xcframework
+          [ -d "$sdk" ] || exit 0
+          plutil -p "$sdk/Info.plist"
+          find "$sdk" -maxdepth 3 | head -n 40
+          find "$sdk" -path "*ios-arm64/*.framework/AppLovinSDK" -exec file {} \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ matrix.godot }}
+          path: ios/bin/${{ matrix.godot }}
+          if-no-files-found: error
+
+  gdscript:
+    name: GDScript (Godot ${{ matrix.godot }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.3-stable", "4.7.2-stable"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${{ matrix.godot }}/Godot_v${{ matrix.godot }}_linux.x86_64.zip"
+          unzip -q godot.zip -d godot-bin
+          mv godot-bin/Godot_v*_linux.x86_64 ./godot
+
+      - name: Check scripts
+        run: ci/check_gdscript.sh ./godot
+
+  package:
+    name: Package
+    needs: [android, ios, gdscript]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: addons/applovin_max/bin/android
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ios-*
+          path: ios-artifacts
+
+      - name: Create zips
+        run: |
+          mkdir -p dist
+          for dir in ios-artifacts/ios-*; do
+            godot_tag="${dir#ios-artifacts/ios-}"
+            godot_version="${godot_tag%-stable}"
+            stage="$(mktemp -d)"
+            cp -R addons "$stage/"
+            rm -f "$stage/addons/applovin_max/bin/android/.gitkeep"
+            mkdir -p "$stage/ios/plugins/applovin_max/frameworks"
+            cp -R "$dir"/. "$stage/ios/plugins/applovin_max/"
+            cp ios/plugin/frameworks/README.md "$stage/ios/plugins/applovin_max/frameworks/"
+            cp README.md LICENSE "$stage/addons/applovin_max/"
+            (cd "$stage" && zip -qr "$GITHUB_WORKSPACE/dist/godot-applovin-max-v${PLUGIN_VERSION}-godot-${godot_version}.zip" addons ios)
+          done
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-applovin-max
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: godot-applovin-max
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
